@@ -4,7 +4,7 @@
 <img width="1250" height="774" alt="Screenshot_20260402_161018" src="https://github.com/user-attachments/assets/0cf000ee-3008-4c13-9cbd-117247e48ba5" />
 
 
-*(Add your screenshot here)*
+
 
 ## ✨ Features
 
