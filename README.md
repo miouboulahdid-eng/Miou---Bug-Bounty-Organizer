@@ -1,9 +1,9 @@
 # 🐺 Miou - Bug Bounty Organizer
 
 **Real-time dashboard to organize, classify, and monitor your bug bounty recon outputs.**
+<img width="1250" height="774" alt="Screenshot_20260402_161018" src="https://github.com/user-attachments/assets/0cf000ee-3008-4c13-9cbd-117247e48ba5" />
 
-![Dashboard Scre<img width="1250" height="774" alt="Screenshot_20260402_161018" src="https://github.com/user-attachments/assets/e9abeeb1-cdfc-4536-8ccf-f5ab9d3e5a2d" />
-enshot](https://i.imgur.com/placeholder.png)  
+
 *(Add your screenshot here)*
 
 ## ✨ Features
