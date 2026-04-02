@@ -2,7 +2,8 @@
 
 **Real-time dashboard to organize, classify, and monitor your bug bounty recon outputs.**
 
-![Dashboard Screenshot](https://i.imgur.com/placeholder.png)  
+![Dashboard Scre<img width="1250" height="774" alt="Screenshot_20260402_161018" src="https://github.com/user-attachments/assets/e9abeeb1-cdfc-4536-8ccf-f5ab9d3e5a2d" />
+enshot](https://i.imgur.com/placeholder.png)  
 *(Add your screenshot here)*
 
 ## ✨ Features
