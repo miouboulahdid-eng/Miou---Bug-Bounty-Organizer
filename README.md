@@ -2,6 +2,7 @@
 
 **Real-time dashboard to organize, classify, and monitor your bug bounty recon outputs.**
 <img width="1602" height="811" alt="Screenshot_20260402_210044" src="https://github.com/user-attachments/assets/0aed6e47-8f80-40be-88f5-d4f9a5f8ede8" />
+<img width="1646" height="859" alt="Screenshot_20260402_211222" src="https://github.com/user-attachments/assets/9ba35ebc-a5da-4628-81dd-23fca01a3086" />
 
 
 
