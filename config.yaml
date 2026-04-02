@@ -1,0 +1,4 @@
+tools:
+  auto_detect:
+    enabled: true
+    watch_path: "data/raw/"
