@@ -1,9 +1,10 @@
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.text import Text
+from collections import deque
 import os
 import json
 import time
@@ -12,11 +13,12 @@ import re
 import shutil
 import psutil
 from datetime import datetime
-from config import ORGANIZED_DIR, RAW_DIR
+from config import ORGANIZED_DIR, RAW_DIR, LOGS_DIR
 
 console = Console()
 CHECK_INTERVAL = 2
 FALLBACK_TIMEOUT = int(os.environ.get("BBO_FALLBACK_TIMEOUT", 10))
+MAX_LOG_ENTRIES = 30
 
 DATA_TYPES = ["admin", "param", "keys", "cookies", "headers", "vuln", "other"]
 
@@ -39,7 +41,7 @@ LOGO = """
 ║     ██║╚██╔╝██║██║██║   ██║██║   ██║                      ║
 ║     ██║ ╚═╝ ██║██║╚██████╔╝╚██████╔╝                      ║
 ║     ╚═╝     ╚═╝╚═╝ ╚═════╝  ╚═════╝                       ║
-║     Bug Bounty Organizer - Real-time Dashboard 
+║     Bug Bounty Organizer - Real-time Dashboard  
 ╚══════════════════════════════════════════════════════════════════╝[/bold cyan]
 """
 
@@ -53,15 +55,45 @@ active_tools = {}
 active_tools_lock = threading.Lock()
 start_time = time.time()
 last_processed_file = {"name": None, "time": 0}
+event_log = deque(maxlen=MAX_LOG_ENTRIES)
+previous_running_tools = set()
+last_log_mtime = 0
+
+def read_miou_commands():
+    global last_log_mtime
+    log_file = os.path.join(LOGS_DIR, "miou_commands.log")
+    if not os.path.exists(log_file):
+        return
+    mtime = os.path.getmtime(log_file)
+    if mtime == last_log_mtime:
+        return
+    last_log_mtime = mtime
+    try:
+        with open(log_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        for line in lines[-10:]:
+            line = line.strip()
+            if line and not any(line in entry for entry in event_log):
+                event_log.append(line)
+    except:
+        pass
+
+def add_log(message, style="white"):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    log_entry = f"[{timestamp}] {message}"
+    event_log.append(log_entry)
 
 def register_tool(tool_name):
     with active_tools_lock:
+        if tool_name not in active_tools:
+            add_log(f"🟢 Tool '{tool_name}' started", "green")
         active_tools[tool_name] = time.time()
 
 def register_processed_file(filepath):
     global last_processed_file
     last_processed_file["name"] = os.path.basename(filepath)
     last_processed_file["time"] = time.time()
+    add_log(f"✅ Parsed: {os.path.basename(filepath)}", "cyan")
 
 def get_running_recon_tools():
     running = set()
@@ -92,6 +124,17 @@ def get_running_recon_tools():
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return running
+
+def update_tool_status_logs():
+    global previous_running_tools
+    current = get_running_recon_tools()
+    new_tools = current - previous_running_tools
+    stopped_tools = previous_running_tools - current
+    for tool in new_tools:
+        add_log(f"🟢 Process '{tool}' started", "green")
+    for tool in stopped_tools:
+        add_log(f"🔴 Process '{tool}' stopped", "red")
+    previous_running_tools = current
 
 def get_tool_last_activity(tool_name):
     last = 0
@@ -251,18 +294,62 @@ def build_stats_panel(active_tools_list):
     )
     return Panel(stats_text, title="📈 Live Statistics (Active Tools Only)", border_style="green")
 
+def build_logs_panel():
+    read_miou_commands()
+    logs_to_show = list(event_log)[::-1]
+    if not logs_to_show:
+        logs_text = "[dim]No Miou commands yet. Use 'Miou start', 'Miou export', etc.[/dim]"
+    else:
+        logs_text = "\n".join(logs_to_show)
+    return Panel(logs_text, title="📋 Miou Command History", border_style="yellow", height=12)
+
+def build_quick_actions_panel():
+    """لوحة الأوامر السريعة (Quick Actions) باستخدام جدول Rich و Group."""
+    # إنشاء جدول الأوامر
+    cmd_table = Table(show_header=False, box=None, padding=(0, 2))
+    cmd_table.add_column("⚡", style="bold cyan", width=3)
+    cmd_table.add_column("Command", style="bold green")
+    cmd_table.add_column("→", style="dim", width=2)
+    cmd_table.add_column("Description", style="white")
+
+    cmd_table.add_row("", "Miou export --type admin", "→", "Save admin URLs to file")
+    cmd_table.add_row("", "Miou export --format burp", "→", "Generate Burp Suite list")
+    cmd_table.add_row("", "Miou review", "→", "Review low-confidence items")
+    cmd_table.add_row("", "Miou start --clean", "→", "Start fresh session")
+    cmd_table.add_row("", "Miou export --format csv", "→", "Export as CSV for reports")
+    cmd_table.add_row("", "Miou --help", "→", "Show all options")
+
+    # تلميح صغير في الأسفل
+    tip = Text("💡 Tip: Use 'Miou --help' for all options", style="dim")
+    tip_group = Group(cmd_table, tip)
+
+    return Panel(tip_group, title="🚀 Quick Actions", border_style="green", height=14)
+
 def build_layout():
     layout = Layout()
     layout.split(
         Layout(name="header", size=12),
         Layout(name="body"),
-        Layout(name="footer", size=8)
+        Layout(name="logs", size=12),
+        Layout(name="footer", size=6)
+    )
+    layout["body"].split_row(
+        Layout(name="tools_table", ratio=2),
+        Layout(name="quick_actions", ratio=1)
     )
     logo_text = Text.from_ansi(LOGO)
     layout["header"].update(Panel(logo_text, border_style="bright_blue"))
+    
     active_tools_list = get_active_tools_list()
     tools_table = build_tools_table(active_tools_list)
-    layout["body"].update(Panel(tools_table, title="🛠️ Active Recon Tools", border_style="cyan"))
+    layout["tools_table"].update(Panel(tools_table, title="🛠️ Active Recon Tools", border_style="cyan"))
+    
+    quick_actions_panel = build_quick_actions_panel()
+    layout["quick_actions"].update(quick_actions_panel)
+    
+    logs_panel = build_logs_panel()
+    layout["logs"].update(logs_panel)
+    
     stats_panel = build_stats_panel(active_tools_list)
     layout["footer"].update(stats_panel)
     return layout
@@ -271,19 +358,25 @@ def clean_organized():
     if os.path.exists(ORGANIZED_DIR):
         shutil.rmtree(ORGANIZED_DIR)
     os.makedirs(ORGANIZED_DIR, exist_ok=True)
-    print("🧹 Cleaned old organized data.")
+    add_log("🧹 Cleaned old organized data", "yellow")
 
 def start_dashboard(clean_start=False):
+    global previous_running_tools
     if clean_start:
         clean_organized()
     else:
         os.makedirs(ORGANIZED_DIR, exist_ok=True)
     os.makedirs(RAW_DIR, exist_ok=True)
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    previous_running_tools = get_running_recon_tools()
+    add_log("🚀 Dashboard started", "cyan")
     print(f"🚀 Professional Dashboard started. Fallback timeout: {FALLBACK_TIMEOUT}s")
     with Live(build_layout(), refresh_per_second=2, screen=True) as live:
         try:
             while True:
+                update_tool_status_logs()
                 live.update(build_layout())
                 time.sleep(CHECK_INTERVAL)
         except KeyboardInterrupt:
+            add_log("🛑 Dashboard stopped by user", "red")
             pass

@@ -1,33 +1,18 @@
 import os
 import json
-import re
 import time
 from datetime import datetime
-from utils.dashboard import register_tool, register_processed_file
+from utils.dashboard import register_tool, register_processed_file, add_log
+from utils.classifier import classify_url, add_training_example
 from config import ORGANIZED_DIR
 
-PATTERNS = {
-    "admin": re.compile(r'https?://[^/]+/(admin|login|dashboard|wp-admin|administrator|manage)', re.IGNORECASE),
-    "param": re.compile(r'.*\?.*=.*'),
-    "keys": re.compile(r'(?i)(api[_-]?key|secret|token|apikey|access_token|private_key)'),
-    "cookies": re.compile(r'(?i)(cookie|set-cookie)'),
-    "headers": re.compile(r'(?i)(x-|header|content-type|authorization)'),
-    "vuln": re.compile(r'(?i)(vuln|exploit|cve-|xss|sql|injection)'),
-}
-
 def detect_tool(filepath):
+    import re
     base = os.path.basename(filepath)
     name, _ = os.path.splitext(base)
     parts = re.split(r'[-_.]', name)
     tool = parts[0].lower() if parts else "unknown"
     return tool
-
-def detect_type(line):
-    line_lower = line.lower()
-    for typ, pattern in PATTERNS.items():
-        if pattern.search(line):
-            return typ
-    return "other"
 
 def auto_detect_and_parse(filepath):
     os.makedirs(ORGANIZED_DIR, exist_ok=True)
@@ -56,14 +41,18 @@ def auto_detect_and_parse(filepath):
                 elif isinstance(item, dict):
                     url = item.get("url") or item.get("full_url") or item.get("target") or item.get("host")
                 if url:
-                    typ = detect_type(url)
+                    typ, confidence, method = classify_url(url)
+                    review_status = "approved" if confidence > 0.8 else "pending"
                     data_by_type.setdefault(typ, []).append({
                         "full_url": url,
                         "type": typ,
                         "tool": tool_name,
                         "timestamp": now,
                         "timestamp_str": timestamp_str,
-                        "source_file": source_filename
+                        "source_file": source_filename,
+                        "confidence": confidence,
+                        "method": method,
+                        "review_status": review_status
                     })
         else:
             with open(filepath, encoding='utf-8', errors='ignore') as f:
@@ -72,14 +61,18 @@ def auto_detect_and_parse(filepath):
                     line = line.strip()
                     if not line:
                         continue
-                    typ = detect_type(line)
+                    typ, confidence, method = classify_url(line)
+                    review_status = "approved" if confidence > 0.8 else "pending"
                     data_by_type.setdefault(typ, []).append({
                         "full_url": line,
                         "type": typ,
                         "tool": tool_name,
                         "timestamp": now,
                         "timestamp_str": timestamp_str,
-                        "source_file": source_filename
+                        "source_file": source_filename,
+                        "confidence": confidence,
+                        "method": method,
+                        "review_status": review_status
                     })
 
         for typ, items in data_by_type.items():
@@ -95,7 +88,12 @@ def auto_detect_and_parse(filepath):
 
         register_processed_file(filepath)
         total_items = sum(len(v) for v in data_by_type.values())
-        print(f"✅ Parsed {filepath} from tool {tool_name} -> {total_items} items (saved in {tool_dir})")
+        add_log(f"📄 Parsed {os.path.basename(filepath)}: {total_items} items", "cyan")
+
+        # تحديث ملفات Burp
+        from utils.burp_exporter import generate_burp_files
+        generate_burp_files()
 
     except Exception as e:
+        add_log(f"❌ Failed parsing {filepath}: {e}", "red")
         print(f"❌ Failed parsing {filepath}: {e}")

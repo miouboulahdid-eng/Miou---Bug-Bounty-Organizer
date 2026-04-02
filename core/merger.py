@@ -2,7 +2,7 @@ import os
 import json
 from config import ORGANIZED_DIR
 
-OUT_DIR = os.path.join(os.path.dirname(ORGANIZED_DIR), "merged")  # data/merged
+OUT_DIR = os.path.join(os.path.dirname(ORGANIZED_DIR), "merged")
 
 def merge_by_type():
     os.makedirs(OUT_DIR, exist_ok=True)

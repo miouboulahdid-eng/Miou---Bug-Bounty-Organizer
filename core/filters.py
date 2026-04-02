@@ -13,7 +13,7 @@ def filter_results(type_filter=None, tool=None, regex=None, show=50):
         folder_path = os.path.join(ORGANIZED_DIR, folder)
         if not os.path.isdir(folder_path):
             continue
-        tool_name = folder.split('_')[0]
+        tool_name = folder.split('_')[0] if '_' in folder else folder
         for filename in os.listdir(folder_path):
             if not filename.endswith(".json"):
                 continue
